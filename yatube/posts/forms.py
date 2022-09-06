@@ -1,4 +1,3 @@
-from xml.etree.ElementTree import Comment
 from django import forms
 
 from .models import Post, Comment
@@ -13,6 +12,7 @@ class PostForm(forms.ModelForm):
         labels = {
             'text': 'Текст поста',
             'group': 'Группа',
+            'image': 'Картинка',
         }
 
 

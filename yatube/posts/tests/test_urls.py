@@ -1,11 +1,8 @@
 from http import HTTPStatus
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase, Client
 
-from posts.models import Post, Group
-
-User = get_user_model()
+from posts.models import Post, Group, User
 
 
 class PostURLTests(TestCase):
@@ -30,31 +27,37 @@ class PostURLTests(TestCase):
         self.author_client.force_login(self.user)
         self.guest_client = Client()
 
-    def test_pages_status_to_unauthorized_users(self):
-        """Проверка статуса страниц для неавторизованных пользователей."""
+    def test_pages_status_to_authorized_users(self):
+        """Cтатус страниц и шаблонов для авторизованных пользователей."""
         url_status = {
-            '/': HTTPStatus.OK,
-            f'/group/{self.group.slug}/': HTTPStatus.OK,
-            f'/profile/{self.user.username}/': HTTPStatus.OK,
-            f'/posts/{self.post.id}/': HTTPStatus.OK,
+            '/': [HTTPStatus.OK, 'posts/index.html'],
+            f'/group/{self.group.slug}/': [
+                HTTPStatus.OK, 'posts/group_list.html'],
+            f'/profile/{self.user.username}/': [
+                HTTPStatus.OK, 'posts/profile.html'],
+            f'/posts/{self.post.id}/': [
+                HTTPStatus.OK, 'posts/post_detail.html'],
+            '/create/': [
+                HTTPStatus.OK, 'posts/post_create.html'],
+            f'/posts/{self.post.id}/edit/': [
+                HTTPStatus.OK, 'posts/post_create.html'],
+            'unexisting_page/': [HTTPStatus.NOT_FOUND, 'core/404.html'],
+        }
+        for address, status_template in url_status.items():
+            with self.subTest(address=address):
+                response = self.author_client.get(address)
+                self.assertEqual(response.status_code, status_template[0])
+                self.assertTemplateUsed(response, status_template[1])
+
+    def test_pages_status_to_unauthorized_users(self):
+        """Проверка статуса страниц для не авторизованных пользователей."""
+        url_status = {
             '/create/': HTTPStatus.FOUND,
             f'/posts/{self.post.id}/edit/': HTTPStatus.FOUND,
-            'unexisting_page/': HTTPStatus.NOT_FOUND,
         }
         for address, status in url_status.items():
             with self.subTest(address=address):
                 response = self.client.get(address)
-                self.assertEqual(response.status_code, status)
-
-    def test_pages_status_to_authorized_users(self):
-        """Проверка статуса страниц для авторизованных пользователей."""
-        url_status = {
-            '/create/': HTTPStatus.OK,
-            f'/posts/{self.post.id}/edit/': HTTPStatus.OK,
-        }
-        for address, status in url_status.items():
-            with self.subTest(address=address):
-                response = self.authorized_client.get(address)
                 self.assertEqual(response.status_code, status)
 
     def test_pages_status_to_author_post(self):
@@ -66,22 +69,6 @@ class PostURLTests(TestCase):
         """Проверка статуса страницы для не автора поста"""
         response = self.client.get(f'/posts/{self.post.id}/edit/')
         self.assertEqual(response.status_code, HTTPStatus.FOUND)
-
-    def test_urls_uses_correct_template(self):
-        """URL-адрес использует соответствующий шаблон."""
-        templates_url_names = {
-            '/': 'posts/index.html',
-            f'/group/{self.group.slug}/': 'posts/group_list.html',
-            f'/profile/{self.user.username}/': 'posts/profile.html',
-            f'/posts/{self.post.id}/': 'posts/post_detail.html',
-            '/create/': 'posts/post_create.html',
-            f'/posts/{self.post.id}/edit/': 'posts/post_create.html',
-            'unexisting_page/': 'core/404.html',
-        }
-        for address, template in templates_url_names.items():
-            with self.subTest(address=address):
-                response = self.author_client.get(address)
-                self.assertTemplateUsed(response, template)
 
     def test_guest_users_to_post_create(self):
         """Проверка переадресации страницы post_create для гостя."""
