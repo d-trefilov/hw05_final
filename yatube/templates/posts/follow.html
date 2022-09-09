@@ -9,7 +9,8 @@
     {% cache 20 index_page %}
     {% include 'posts/includes/switcher.html' %}
     {% for post in page_obj %} 
-      {% include 'posts/includes/page_obj.html' %}
+      {% include 'posts/includes/post_card.html' %}
+      {% if not forloop.last %}<hr>{% endif %}
     {% endfor %}
     {% include 'posts/includes/paginator.html' %}
   </div>

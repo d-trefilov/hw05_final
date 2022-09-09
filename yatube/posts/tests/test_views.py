@@ -9,7 +9,7 @@ from django.urls import reverse
 from django import forms
 from django.core.cache import cache
 
-from posts.models import Post, Group, Follow, User
+from posts.models import Post, Group, Follow, User, Comment
 from ..constants import NUMB_OF_POSTS, NUMB_OF_POSTS_TEST, NUMB_OF_POSTS_2
 from posts.forms import PostForm
 
@@ -20,6 +20,8 @@ class PostPagesTests(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        cls.user_follow = User.objects.create_user(username='UserFollow')
+        cls.user_unfollow = User.objects.create_user(username='UserUnFollow')
         cls.user = User.objects.create_user(username='auth')
         cls.small_gif = (
             b'\x47\x49\x46\x38\x39\x61\x02\x00'
@@ -55,6 +57,10 @@ class PostPagesTests(TestCase):
     def setUp(self):
         self.authorized_client = Client()
         self.authorized_client.force_login(PostPagesTests.user)
+        self.user_follow_client = Client()
+        self.user_follow_client.force_login(PostPagesTests.user_follow)
+        self.user_unfollow_client = Client()
+        self.user_unfollow_client.force_login(PostPagesTests.user_unfollow)
 
     def test_pages_uses_correct_template(self):
         """URL-адрес использует соответствующий шаблон."""
@@ -75,79 +81,57 @@ class PostPagesTests(TestCase):
                 response = self.authorized_client.get(reverse_name)
                 self.assertTemplateUsed(response, template)
 
-    def test_post_index_show_correct_context(self):
-        """Шаблон index сформирован с правильным контекстом."""
-        response = self.authorized_client.get(reverse('posts:index'))
-        first_object = response.context['page_obj'][0]
-        post_text_0 = first_object.text
-        post_pub_date_0 = first_object.pub_date.strftime('%Y:%B:%D')
-        post_author_0 = first_object.author.username
-        post_group_0 = first_object.group.id
-        post_id_0 = first_object.id
-        post_image_0 = first_object.image
-        self.assertEqual(post_pub_date_0, date.today().strftime('%Y:%B:%D'))
-        self.assertEqual(post_author_0, self.user.username)
-        self.assertTrue(
-            Post.objects.filter(
-                text=post_text_0,
-                group_id=post_group_0,
-                id=post_id_0,
-                image=post_image_0,
-            ).exists()
+    def test_index_group_list_profile_show_correct_context(self):
+        """Шаблоны index, group_list, profile сформированы с правильным
+        контекстом."""
+        user_new = User.objects.create_user(username='Follower')
+        Follow.objects.create(
+            user=user_new,
+            author=self.user,
         )
-
-    def test_group_list_show_correct_context(self):
-        """Шаблон group_list сформирован с правильным контекстом."""
-        response = self.authorized_client.get(reverse(
-            'posts:group_list',
-            kwargs={'slug': self.post.group.slug},
-        ))
-        first_object = response.context['page_obj'][0]
-        post_text_0 = first_object.text
-        post_pub_date_0 = first_object.pub_date.strftime('%Y:%B:%D')
-        post_author_0 = first_object.author.username
-        post_group_0 = first_object.group.id
-        post_id_0 = first_object.id
-        post_image_0 = first_object.image
-        self.assertEqual(post_pub_date_0, date.today().strftime('%Y:%B:%D'))
-        self.assertEqual(post_author_0, self.user.username)
-        self.assertEqual(response.context.get('group'), self.post.group)
-        self.assertTrue(
-            Post.objects.filter(
-                text=post_text_0,
-                group_id=post_group_0,
-                id=post_id_0,
-                image=post_image_0,
-            ).exists()
-        )
-
-    def test_profile_show_correct_context(self):
-        """Шаблон profile сформирован с правильным контекстом."""
-        response = self.authorized_client.get(reverse(
-            'posts:profile',
-            kwargs={'username': self.user.username},
-        ))
-        first_object = response.context['page_obj'][0]
-        post_text_0 = first_object.text
-        post_pub_date_0 = first_object.pub_date.strftime('%Y:%B:%D')
-        post_author_0 = first_object.author.username
-        post_group_0 = first_object.group.id
-        post_id_0 = first_object.id
-        post_image_0 = first_object.image
-        self.assertEqual(post_pub_date_0, date.today().strftime('%Y:%B:%D'))
-        self.assertEqual(post_author_0, self.user.username)
-        self.assertEqual(response.context.get('author'), self.user)
-        self.assertTrue(
-            Post.objects.filter(
-                text=post_text_0,
-                group_id=post_group_0,
-                id=post_id_0,
-                image=post_image_0,
-            ).exists()
-        )
+        templates_first_object = {
+            reverse('posts:index'): ['page_obj', 0],
+            reverse('posts:group_list', kwargs={'slug': self.post.group.slug}):
+                ['page_obj', 0],
+            reverse('posts:profile', kwargs={'username': self.user.username}):
+                ['page_obj', 0],
+        }
+        for template, object in templates_first_object.items():
+            with self.subTest(template=template):
+                response = self.authorized_client.get(template)
+                first_object = response.context[object[0]][object[1]]
+                self.assertEqual(
+                    first_object.pub_date.strftime('%Y:%B:%D'),
+                    date.today().strftime('%Y:%B:%D'),
+                )
+                self.assertEqual(
+                    first_object.author.username,
+                    self.user.username,
+                )
+                self.assertEqual(self.post.text, first_object.text)
+                self.assertEqual(self.post.group.id, first_object.group.id)
+                self.assertEqual(self.post.id, first_object.id)
+                self.assertEqual(self.post.image, first_object.image)
+                self.assertEqual(
+                    self.user.follower,
+                    first_object.author.follower,
+                )
+                self.assertTrue(
+                    Post.objects.filter(
+                        text=first_object.text,
+                        group_id=first_object.group.id,
+                        id=first_object.id,
+                        image=first_object.image,
+                    ).exists()
+                )
 
     def test_post_detail_show_correct_context(self):
         """Шаблон post_detail сформирован с правильным контекстом."""
+        Comment.objects.create(
+            post=self.post,
+            author=self.user,
+            text='Пробный комментарий'
+        )
         response = self.authorized_client.get(
             reverse(
                 'posts:post_detail',
@@ -168,14 +152,9 @@ class PostPagesTests(TestCase):
             response_post_detail.group.title,
             self.post.group.title,
         )
-        self.assertEqual(
-            response_post_detail.id,
-            self.post.id,
-        )
-        self.assertEqual(
-            response_post_detail.image,
-            self.post.image,
-        )
+        self.assertEqual(response_post_detail.id, self.post.id)
+        self.assertEqual(response_post_detail.image, self.post.image)
+        self.assertEqual(response_post_detail.comments, self.post.comments)
 
     def test_post_incorrect_group(self):
         """Пост не попал в группу, для которой не был предназначен."""
@@ -249,26 +228,29 @@ class PostPagesTests(TestCase):
 
     def test_following(self):
         """Пользователь может подписываться на других пользователей."""
-        User.objects.create_user(username='NoName')
+        user_new = User.objects.create_user(username='NoName')
         following_count = Follow.objects.count()
         self.authorized_client.post(
-            reverse('posts:profile_follow', kwargs={'username': 'NoName'}),
+            reverse(
+                'posts:profile_follow',
+                kwargs={'username': user_new.username}
+            ),
             follow=True,
         )
+        user_first = Follow.objects.first().user
         self.assertEqual(Follow.objects.count(), following_count + 1)
         self.assertEqual(
-            Follow.objects.first().user,
+            user_first,
             self.user,
         )
-        Follow.objects.filter(id=self.user.id).delete()
-        self.assertNotEqual(Follow.objects.count(), following_count + 1)
 
     def test_followers_new_post(self):
         """Новая запись пользователя появляется в ленте подписчиков."""
-        user_follow = User.objects.create_user(username='UserFollow')
-        following_count1 = Follow.objects.filter(user=user_follow).count()
-        self.authorized_client.post(
-            reverse('posts:profile_follow', kwargs={'username': 'UserFollow'}),
+        self.user_follow_client.post(
+            reverse(
+                'posts:profile_follow',
+                kwargs={'username': self.user.username}
+            ),
             follow=True,
         )
         post_new = Post.objects.create(
@@ -276,72 +258,120 @@ class PostPagesTests(TestCase):
             text='Пост тестирования подписок',
             group=self.group,
         )
+        response = self.user_follow_client.get(reverse(
+            'posts:follow_index',
+        ))
+        first_object = response.context['page_obj'][0]
         self.assertEqual(
-            Follow.objects.count(),
-            following_count1 + 1,
+            first_object.pub_date.strftime('%Y:%B:%D'),
+            date.today().strftime('%Y:%B:%D'),
         )
-        self.assertTrue(
-            Post.objects.filter(
-                author=self.user,
-                text=post_new.text,
-            ).exists()
+        self.assertEqual(
+            first_object.author.username,
+            self.user.username,
+        )
+        self.assertEqual(post_new.text, first_object.text)
+        self.assertEqual(post_new.group.id, first_object.group.id)
+        self.assertEqual(post_new.id, first_object.id)
+        self.assertEqual(post_new.image, first_object.image)
+        self.assertEqual(
+            self.user.follower,
+            first_object.author.follower,
         )
 
     def test_unfollowers_new_post(self):
         """Новая запись пользователя не появляется в ленте не подписчиков."""
-        user_unfollow = User.objects.create_user(username='UserUnFollow')
-        following_count = Follow.objects.filter(user=user_unfollow).count()
+        self.user_unfollow_client.post(
+            reverse(
+                'posts:profile_follow',
+                kwargs={'username': self.user_follow.username}
+            ),
+            follow=True,
+        )
+        group_new = Group.objects.create(
+            title='Группа user_follow',
+            slug='follow-slug',
+            description='Тестовое описание1',
+        )
+        Post.objects.create(
+            author=self.user_follow,
+            text='Пост, созданный user_follow',
+            group=group_new,
+            image=self.uploaded,
+        )
         post_new = Post.objects.create(
             author=self.user,
             text='Пост тестирования подписок',
             group=self.group,
         )
+        response = self.user_unfollow_client.get(reverse(
+            'posts:follow_index',
+        ))
+        first_object = response.context['page_obj'][0]
         self.assertNotEqual(
-            Follow.objects.filter(user=user_unfollow).count(),
-            following_count + 1,
+            first_object.author.username,
+            self.user.username,
         )
-        self.assertTrue(
-            Post.objects.filter(
-                author=self.user,
-                text=post_new.text,
-            ).exists()
+        self.assertNotEqual(post_new.text, first_object.text)
+        self.assertNotEqual(post_new.group.id, first_object.group.id)
+        self.assertNotEqual(post_new.id, first_object.id)
+        self.assertNotEqual(post_new.image, first_object.image)
+        self.assertNotEqual(
+            self.user.follower,
+            first_object.author.follower,
         )
 
     def test_unfollow_user(self):
         """Тест отписки."""
-        User.objects.create_user(username='NoName')
         following_count = Follow.objects.count()
-        self.authorized_client.post(
-            reverse('posts:profile_follow', kwargs={'username': 'NoName'}),
-            follow=True,
+        Follow.objects.create(
+            user=self.user_unfollow,
+            author=self.user,
         )
         self.assertEqual(Follow.objects.count(), following_count + 1)
-        self.authorized_client.post(
-            reverse('posts:profile_unfollow', kwargs={'username': 'NoName'}),
+        self.user_unfollow_client.post(
+            reverse(
+                'posts:profile_unfollow',
+                kwargs={'username': self.user.username}
+            ),
             follow=True,
         )
         self.assertEqual(Follow.objects.count(), following_count)
+        self.assertFalse(
+            Follow.objects.filter(
+                user=self.user_unfollow,
+                author=self.user,
+            ).exists()
+        )
 
     def test_unfollow_user(self):
         """Дважды подписаться на автора невозможно."""
-        User.objects.create_user(username='NoName')
         following_count = Follow.objects.count()
-        self.authorized_client.post(
-            reverse('posts:profile_follow', kwargs={'username': 'NoName'}),
+        self.user_follow_client.post(
+            reverse(
+                'posts:profile_follow',
+                kwargs={'username': self.user.username}
+            ),
             follow=True,
         )
         self.assertEqual(Follow.objects.count(), following_count + 1)
-        self.authorized_client.post(
-            reverse('posts:profile_follow', kwargs={'username': 'NoName'}),
+        self.user_follow_client.post(
+            reverse(
+                'posts:profile_follow',
+                kwargs={'username': self.user.username}
+            ),
             follow=True,
         )
-        self.assertNotEqual(Follow.objects.count(), following_count + 2)
+        self.assertEqual(Follow.objects.count(), following_count + 1)
 
     def test_unfollow_user(self):
         """Пользователь не может подписаться сам на себя."""
         following_count = Follow.objects.count()
         self.authorized_client.post(
-            reverse('posts:profile_follow', kwargs={'username': 'auth'}),
+            reverse(
+                'posts:profile_follow',
+                kwargs={'username': self.user.username}
+            ),
             follow=True,
         )
         self.assertEqual(Follow.objects.count(), following_count)
@@ -387,8 +417,8 @@ class PaginatorViewsTest(TestCase):
                 response = self.client.get(page)
                 self.assertEqual(len(response.context['page_obj']), number)
 
-    def test_correct_place_post_in_group_list(self):
-        """Пост попал в нужное место на странице group_list."""
+    def test_correct_place_post_in_index_group_list_profile(self):
+        """Пост попал в нужное место на странице index, group_list, profile."""
         post_new = Post.objects.create(
             author=self.user,
             text='Новый пост',

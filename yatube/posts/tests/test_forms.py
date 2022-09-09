@@ -28,6 +28,11 @@ class PostCreateFormTests(TestCase):
             text='Тестовый пост',
             group=cls.group,
         )
+        cls.comment = Comment.objects.create(
+            text='Первый комментарий',
+            post=cls.post,
+            author=cls.user,
+        )
         cls.form = PostForm()
 
     @classmethod
@@ -54,6 +59,7 @@ class PostCreateFormTests(TestCase):
 
     def test_create_post(self):
         """Валидная форма создает запись в Post."""
+        posts_old = Post.objects.get()
         posts_count = Post.objects.count()
         form_data = {
             'text': 'Тестовый текст1',
@@ -65,6 +71,7 @@ class PostCreateFormTests(TestCase):
             data=form_data,
             follow=True,
         )
+        posts_new = Post.objects.exclude(id=posts_old.id)
         self.assertRedirects(response, reverse(
             'posts:profile',
             kwargs={'username': 'auth'},
@@ -77,6 +84,9 @@ class PostCreateFormTests(TestCase):
                 group=form_data['group'],
             ).exists()
         )
+        self.assertEqual(posts_new.count(), 1)
+        self.assertEqual(posts_new[0].text, form_data['text'])
+        self.assertEqual(posts_new[0].group.id, form_data['group'])
 
     def test_edit_post(self):
         """Валидная форма изменяет запись в Post."""
@@ -109,10 +119,12 @@ class PostCreateFormTests(TestCase):
 
     def test_comment_to_post_detail(self):
         """Комментарий появляется на странице поста."""
+        comments_old = Comment.objects.get()
         comments_count = Comment.objects.count()
         form_data = {
             'text': 'Тестовый комментарий',
         }
+        comments_new = Comment.objects.exclude(id=comments_old.id)
         self.authorized_client.post(
             reverse('posts:add_comment', kwargs={'post_id': self.post.id}),
             data=form_data,
@@ -124,3 +136,5 @@ class PostCreateFormTests(TestCase):
                 text=form_data['text'],
             ).exists()
         )
+        self.assertEqual(comments_new.count(), 1)
+        self.assertEqual(comments_new[0].text, form_data['text'])

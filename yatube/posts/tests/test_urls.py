@@ -25,7 +25,6 @@ class PostURLTests(TestCase):
         self.authorized_client.force_login(self.user)
         self.author_client = Client()
         self.author_client.force_login(self.user)
-        self.guest_client = Client()
 
     def test_pages_status_to_authorized_users(self):
         """Cтатус страниц и шаблонов для авторизованных пользователей."""
@@ -72,12 +71,12 @@ class PostURLTests(TestCase):
 
     def test_guest_users_to_post_create(self):
         """Проверка переадресации страницы post_create для гостя."""
-        response = self.guest_client.get('/create/', follow=True)
+        response = self.client.get('/create/', follow=True)
         self.assertRedirects(response, '/auth/login/?next=/create/')
 
     def test_guest_users_to_post_edit(self):
         """Проверка переадресации страницы post_edit для гостя."""
-        response = self.guest_client.get(
+        response = self.client.get(
             f'/posts/{self.post.id}/edit/',
             follow=True,
         )
@@ -89,8 +88,8 @@ class PostURLTests(TestCase):
     def test_authorized_users_to_post_edit(self):
         """Проверка переадресации страницы post_edit для не автора."""
         user1 = User.objects.create_user(username='HasNoName')
-        self.guest_client.force_login(user1)
-        response = self.guest_client.get(
+        self.client.force_login(user1)
+        response = self.client.get(
             f'/posts/{self.post.id}/edit/',
             follow=True,
         )
@@ -101,7 +100,7 @@ class PostURLTests(TestCase):
 
     def test_guest_users_to_post_comment(self):
         """Не авторизованный пользователь не может комментировать посты."""
-        response = self.guest_client.get(
+        response = self.client.get(
             f'/posts/{self.post.id}/comment/',
         )
         self.assertRedirects(

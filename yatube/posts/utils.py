@@ -1,7 +1,7 @@
 from django.core.paginator import Paginator
 
 
-def paginator_function(request, posts, numb_of_posts):
+def paginator_get_page(request, posts, numb_of_posts):
     """Пагинация."""
     paginator = Paginator(posts, numb_of_posts)
     page_number = request.GET.get('page')

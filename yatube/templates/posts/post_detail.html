@@ -1,9 +1,9 @@
 {% extends 'base.html' %} 
-{% load thumbnail %}
 {% block title %} 
   Пост {{ post.text|truncatechars_html:20 }}
 {% endblock %}
 {% load user_filters %}
+{% load thumbnail %}
 {% block content %}
 <div class="container py-5">
   <div class="row">

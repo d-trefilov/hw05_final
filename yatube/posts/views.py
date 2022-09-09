@@ -1,9 +1,9 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 
-from .models import Post, Group, User, Comment, Follow
+from .models import Post, Group, User, Follow
 from .forms import PostForm, CommentForm
-from .utils import paginator_function
+from .utils import paginator_get_page
 from .constants import NUMB_OF_POSTS
 
 
@@ -15,7 +15,7 @@ def index(request):
         'group',
     )
     context = {
-        'page_obj': paginator_function(request, posts, NUMB_OF_POSTS),
+        'page_obj': paginator_get_page(request, posts, NUMB_OF_POSTS),
     }
 
     return render(request, template, context)
@@ -25,10 +25,10 @@ def group_posts(request, slug):
     """Страница с группами."""
     group = get_object_or_404(Group, slug=slug)
     template = 'posts/group_list.html'
-    posts = Post.objects.filter(group=group)
+    posts = group.posts.all()
     context = {
         'group': group,
-        'page_obj': paginator_function(request, posts, NUMB_OF_POSTS),
+        'page_obj': paginator_get_page(request, posts, NUMB_OF_POSTS),
     }
 
     return render(request, template, context)
@@ -38,13 +38,16 @@ def profile(request, username):
     """Страница профайла пользователя."""
     template = 'posts/profile.html'
     author = get_object_or_404(User, username=username)
-    posts = Post.objects.filter(author=author)
-    following = Follow.objects.filter(
-        user=request.user.id,
-        author=author.id,
-    ).exists()
+    posts = author.posts.all()
+    if request.user.is_authenticated:
+        following = Follow.objects.filter(
+            user=request.user.id,
+            author=author.id,
+        ).exists()
+    else:
+        following = False
     context = {
-        'page_obj': paginator_function(request, posts, NUMB_OF_POSTS),
+        'page_obj': paginator_get_page(request, posts, NUMB_OF_POSTS),
         'author': author,
         'following': following,
     }
@@ -57,7 +60,7 @@ def post_detail(request, post_id):
     template = 'posts/post_detail.html'
     post = get_object_or_404(Post, id=post_id)
     form = CommentForm()
-    comments = Comment.objects.filter(post_id=post_id)
+    comments = post.comments.all()
     context = {
         'post': post,
         'form': form,
@@ -137,7 +140,7 @@ def follow_index(request):
     posts = Post.objects.filter(author__following__user=request.user)
     context = {
         'follower': request.user,
-        'page_obj': paginator_function(request, posts, NUMB_OF_POSTS),
+        'page_obj': paginator_get_page(request, posts, NUMB_OF_POSTS),
     }
 
     return render(request, 'posts/follow.html', context)
@@ -157,7 +160,9 @@ def profile_follow(request, username):
 @login_required
 def profile_unfollow(request, username):
     """Отписка от пользователя."""
-    user = request.user
     author = get_object_or_404(User, username=username)
-    Follow.objects.get(author=author, user=user).delete()
-    return redirect('posts:profile', username=username)
+    is_follower = Follow.objects.filter(author=author, user=request.user)
+    if is_follower.exists():
+        is_follower.delete()
+
+    return redirect('posts:profile', username=author)
