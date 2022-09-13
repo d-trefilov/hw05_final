@@ -99,35 +99,42 @@ class PostPagesTests(TestCase):
         for template, object in templates_first_object.items():
             with self.subTest(template=template):
                 response = self.authorized_client.get(template)
-                first_object = response.context[object[0]][object[1]]
+                element = object[0]
+                number = object[1]
+                first_object = response.context[element][number]
                 self.assertEqual(
                     first_object.pub_date.strftime('%Y:%B:%D'),
                     date.today().strftime('%Y:%B:%D'),
                 )
                 self.assertEqual(
-                    first_object.author.username,
-                    self.user.username,
+                    first_object.author,
+                    self.user,
                 )
                 self.assertEqual(self.post.text, first_object.text)
-                self.assertEqual(self.post.group.id, first_object.group.id)
+                self.assertEqual(self.post.group, first_object.group)
                 self.assertEqual(self.post.id, first_object.id)
                 self.assertEqual(self.post.image, first_object.image)
-                self.assertEqual(
-                    self.user.follower,
-                    first_object.author.follower,
-                )
-                self.assertTrue(
-                    Post.objects.filter(
-                        text=first_object.text,
-                        group_id=first_object.group.id,
-                        id=first_object.id,
-                        image=first_object.image,
-                    ).exists()
-                )
+                if template == reverse(
+                    'posts:group_list',
+                    kwargs={'slug': self.post.group.slug},
+                ):
+                    self.assertEqual(
+                        response.context.get('group'),
+                        self.post.group,
+                    )
+                if template == reverse(
+                    'posts:profile',
+                    kwargs={'username': self.user.username}
+                ):
+                    self.assertEqual(self.user, first_object.author)
+                    self.assertEqual(
+                        self.user.follower,
+                        first_object.author.follower,
+                    )
 
     def test_post_detail_show_correct_context(self):
         """Шаблон post_detail сформирован с правильным контекстом."""
-        Comment.objects.create(
+        comment_new = Comment.objects.create(
             post=self.post,
             author=self.user,
             text='Пробный комментарий'
@@ -145,16 +152,20 @@ class PostPagesTests(TestCase):
             date.today().strftime('%Y:%B:%D')
         )
         self.assertEqual(
-            response_post_detail.author.username,
-            self.user.username,
+            response_post_detail.author,
+            self.user,
         )
         self.assertEqual(
-            response_post_detail.group.title,
-            self.post.group.title,
+            response_post_detail.group,
+            self.post.group,
         )
         self.assertEqual(response_post_detail.id, self.post.id)
         self.assertEqual(response_post_detail.image, self.post.image)
-        self.assertEqual(response_post_detail.comments, self.post.comments)
+        self.assertIn(comment_new, response.context.get('comments'))
+        self.assertIsInstance(
+            response.context['form'].fields.get('text'),
+            forms.fields.CharField,
+        )
 
     def test_post_incorrect_group(self):
         """Пост не попал в группу, для которой не был предназначен."""
@@ -186,11 +197,11 @@ class PostPagesTests(TestCase):
         )
         response_post_edit = response.context.get('post')
         self.assertEqual(
-            response_post_edit.author.username,
-            self.user.username,
+            response_post_edit.author,
+            self.user,
         )
         self.assertEqual(response_post_edit.text, self.post.text)
-        self.assertEqual(response_post_edit.group.title, self.post.group.title)
+        self.assertEqual(response_post_edit.group, self.post.group)
         self.assertTrue(response.context.get('form'), self.form)
         self.assertEqual(response.context.get('is_edit'), True)
         self.assertIsInstance(response.context.get('is_edit'), bool)
@@ -237,21 +248,19 @@ class PostPagesTests(TestCase):
             ),
             follow=True,
         )
-        user_first = Follow.objects.first().user
         self.assertEqual(Follow.objects.count(), following_count + 1)
-        self.assertEqual(
-            user_first,
-            self.user,
+        self.assertTrue(
+            Follow.objects.filter(
+                user=self.user,
+                author=user_new
+            ).exists()
         )
 
     def test_followers_new_post(self):
         """Новая запись пользователя появляется в ленте подписчиков."""
-        self.user_follow_client.post(
-            reverse(
-                'posts:profile_follow',
-                kwargs={'username': self.user.username}
-            ),
-            follow=True,
+        Follow.objects.create(
+            user=self.user_follow,
+            author=self.user,
         )
         post_new = Post.objects.create(
             author=self.user,
@@ -267,11 +276,11 @@ class PostPagesTests(TestCase):
             date.today().strftime('%Y:%B:%D'),
         )
         self.assertEqual(
-            first_object.author.username,
-            self.user.username,
+            first_object.author,
+            self.user,
         )
         self.assertEqual(post_new.text, first_object.text)
-        self.assertEqual(post_new.group.id, first_object.group.id)
+        self.assertEqual(post_new.group, first_object.group)
         self.assertEqual(post_new.id, first_object.id)
         self.assertEqual(post_new.image, first_object.image)
         self.assertEqual(
@@ -281,23 +290,9 @@ class PostPagesTests(TestCase):
 
     def test_unfollowers_new_post(self):
         """Новая запись пользователя не появляется в ленте не подписчиков."""
-        self.user_unfollow_client.post(
-            reverse(
-                'posts:profile_follow',
-                kwargs={'username': self.user_follow.username}
-            ),
-            follow=True,
-        )
-        group_new = Group.objects.create(
-            title='Группа user_follow',
-            slug='follow-slug',
-            description='Тестовое описание1',
-        )
-        Post.objects.create(
+        Follow.objects.create(
+            user=self.user_unfollow,
             author=self.user_follow,
-            text='Пост, созданный user_follow',
-            group=group_new,
-            image=self.uploaded,
         )
         post_new = Post.objects.create(
             author=self.user,
@@ -307,19 +302,7 @@ class PostPagesTests(TestCase):
         response = self.user_unfollow_client.get(reverse(
             'posts:follow_index',
         ))
-        first_object = response.context['page_obj'][0]
-        self.assertNotEqual(
-            first_object.author.username,
-            self.user.username,
-        )
-        self.assertNotEqual(post_new.text, first_object.text)
-        self.assertNotEqual(post_new.group.id, first_object.group.id)
-        self.assertNotEqual(post_new.id, first_object.id)
-        self.assertNotEqual(post_new.image, first_object.image)
-        self.assertNotEqual(
-            self.user.follower,
-            first_object.author.follower,
-        )
+        self.assertNotIn(post_new.text, response.context)
 
     def test_unfollow_user(self):
         """Тест отписки."""
@@ -328,7 +311,6 @@ class PostPagesTests(TestCase):
             user=self.user_unfollow,
             author=self.user,
         )
-        self.assertEqual(Follow.objects.count(), following_count + 1)
         self.user_unfollow_client.post(
             reverse(
                 'posts:profile_unfollow',

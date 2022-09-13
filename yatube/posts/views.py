@@ -139,7 +139,6 @@ def follow_index(request):
     """Подписки пользователя."""
     posts = Post.objects.filter(author__following__user=request.user)
     context = {
-        'follower': request.user,
         'page_obj': paginator_get_page(request, posts, NUMB_OF_POSTS),
     }
 
@@ -161,8 +160,8 @@ def profile_follow(request, username):
 def profile_unfollow(request, username):
     """Отписка от пользователя."""
     author = get_object_or_404(User, username=username)
-    is_follower = Follow.objects.filter(author=author, user=request.user)
-    if is_follower.exists():
-        is_follower.delete()
+    follower_list = Follow.objects.filter(author=author, user=request.user)
+    if follower_list.exists():
+        follower_list.delete()
 
     return redirect('posts:profile', username=author)

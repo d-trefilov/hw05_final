@@ -59,10 +59,12 @@ class PostCreateFormTests(TestCase):
 
     def test_create_post(self):
         """Валидная форма создает запись в Post."""
-        posts_old = Post.objects.get()
-        posts_count = Post.objects.count()
+        posts_old_id = []
+        for i in Post.objects.values_list('id', flat=True):
+            posts_old_id.append(i)
+        posts_count = len(posts_old_id)
         form_data = {
-            'text': 'Тестовый текст1',
+            'text': 'Тестовый текст2',
             'group': self.group.id,
             'image': self.uploaded,
         }
@@ -71,22 +73,18 @@ class PostCreateFormTests(TestCase):
             data=form_data,
             follow=True,
         )
-        posts_new = Post.objects.exclude(id=posts_old.id)
+        posts_new = Post.objects.all().exclude(
+            id__in=[i for i in posts_old_id]
+        )
         self.assertRedirects(response, reverse(
             'posts:profile',
             kwargs={'username': 'auth'},
         ))
         self.assertEqual(Post.objects.count(), posts_count + 1)
-        self.assertTrue(
-            Post.objects.filter(
-                author=self.user,
-                text=form_data['text'],
-                group=form_data['group'],
-            ).exists()
-        )
         self.assertEqual(posts_new.count(), 1)
-        self.assertEqual(posts_new[0].text, form_data['text'])
-        self.assertEqual(posts_new[0].group.id, form_data['group'])
+        self.assertIn(form_data['text'], [i.text for i in posts_new])
+        self.assertIn(form_data['group'], [i.group.id for i in posts_new])
+        self.assertIn(self.user, [i.author for i in posts_new])
 
     def test_edit_post(self):
         """Валидная форма изменяет запись в Post."""
@@ -119,22 +117,22 @@ class PostCreateFormTests(TestCase):
 
     def test_comment_to_post_detail(self):
         """Комментарий появляется на странице поста."""
-        comments_old = Comment.objects.get()
-        comments_count = Comment.objects.count()
+        comments_old_id = []
+        for i in Comment.objects.values_list('id', flat=True):
+            comments_old_id.append(i)
+        comments_count = len(comments_old_id)
         form_data = {
             'text': 'Тестовый комментарий',
         }
-        comments_new = Comment.objects.exclude(id=comments_old.id)
         self.authorized_client.post(
             reverse('posts:add_comment', kwargs={'post_id': self.post.id}),
             data=form_data,
             follow=True,
         )
-        self.assertEqual(Comment.objects.count(), comments_count + 1)
-        self.assertTrue(
-            Comment.objects.filter(
-                text=form_data['text'],
-            ).exists()
+        comments_new = Comment.objects.all().exclude(
+            id__in=[i for i in comments_old_id]
         )
+        self.assertEqual(Comment.objects.count(), comments_count + 1)
         self.assertEqual(comments_new.count(), 1)
-        self.assertEqual(comments_new[0].text, form_data['text'])
+        self.assertIn(form_data['text'], [i.text for i in comments_new])
+        self.assertIn(self.user, [i.author for i in comments_new])

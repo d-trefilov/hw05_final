@@ -8,6 +8,7 @@
     <h1>Все посты пользователя {{ author.get_full_name }}</h1>
     <p>Всего постов: {{ author.posts.count }} </p>
     <p>Всего подписчиков: {{ author.following.count }} </p>
+    <p>Всего подписок: {{ user.follower.count }} </p>
     {% if user.is_authenticated %}
       {% if user != post.author %}  
         {% if following %}
