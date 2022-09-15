@@ -74,7 +74,7 @@ class PostCreateFormTests(TestCase):
             follow=True,
         )
         posts_new = Post.objects.all().exclude(
-            id__in=[i for i in posts_old_id]
+            id__in=posts_old_id
         )
         self.assertRedirects(response, reverse(
             'posts:profile',
@@ -82,9 +82,10 @@ class PostCreateFormTests(TestCase):
         ))
         self.assertEqual(Post.objects.count(), posts_count + 1)
         self.assertEqual(posts_new.count(), 1)
-        self.assertIn(form_data['text'], [i.text for i in posts_new])
-        self.assertIn(form_data['group'], [i.group.id for i in posts_new])
-        self.assertIn(self.user, [i.author for i in posts_new])
+        self.assertEqual(form_data['text'], posts_new[0].text)
+        self.assertEqual(form_data['group'], posts_new[0].group.id)
+        self.assertEqual(self.user, posts_new[0].author)
+        self.assertEqual(self.post.image, posts_new[0].image)
 
     def test_edit_post(self):
         """Валидная форма изменяет запись в Post."""
@@ -130,9 +131,9 @@ class PostCreateFormTests(TestCase):
             follow=True,
         )
         comments_new = Comment.objects.all().exclude(
-            id__in=[i for i in comments_old_id]
+            id__in=comments_old_id
         )
         self.assertEqual(Comment.objects.count(), comments_count + 1)
         self.assertEqual(comments_new.count(), 1)
-        self.assertIn(form_data['text'], [i.text for i in comments_new])
-        self.assertIn(self.user, [i.author for i in comments_new])
+        self.assertEqual(form_data['text'], comments_new[0].text)
+        self.assertEqual(self.user, comments_new[0].author)

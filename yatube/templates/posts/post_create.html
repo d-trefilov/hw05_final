@@ -7,6 +7,7 @@
 {% endif %}
 {% endblock title %}
 {% block content %}
+{% load user_filters %}
   <div class="container py-5">
     <div class="row justify-content-center">
       <div class="col-md-8 p-5">
@@ -26,26 +27,12 @@
               {% else %} action="{% url 'posts:post_create' %}"
               {% endif %}
             > 
-
             {% csrf_token %}
 
               {% for field in form %}
-              {% include 'includes/markup_string.html' %}
-                {% load user_filters %}
-                  <label for="{{ field.id_for_label }}">
-                    {{ field.label }}
-                    {% if field.field.required %}
-                      <span class="required text-danger">*</span>
-                    {% endif %}
-                  </label>
-                  {{ field|addclass:'form-control' }}
-                  {% if field.help_text %}
-                    <small id="{{ field.id_for_label }}-help" class="form-text text-muted">
-                      {{ field.help_text|safe }}
-                    </small>
-                  {% endif %}
-              </div>
+                {% include 'includes/markup_string.html' %}
               {% endfor %}
+
               <div class="d-flex justify-content-end">
                 <button type="submit" class="btn btn-primary">
                   {% if is_edit %}

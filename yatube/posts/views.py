@@ -15,6 +15,7 @@ def index(request):
         'group',
     )
     context = {
+        'index': True,
         'page_obj': paginator_get_page(request, posts, NUMB_OF_POSTS),
     }
 
@@ -139,6 +140,7 @@ def follow_index(request):
     """Подписки пользователя."""
     posts = Post.objects.filter(author__following__user=request.user)
     context = {
+        'follow': True,
         'page_obj': paginator_get_page(request, posts, NUMB_OF_POSTS),
     }
 
@@ -150,7 +152,7 @@ def profile_follow(request, username):
     """Подписка на пользователя."""
     author = get_object_or_404(User, username=username)
     follow = Follow.objects.filter(user=request.user, author=author)
-    if (author != request.user) and not follow.exists():
+    if author != request.user and not follow.exists():
         Follow.objects.create(author=author, user=request.user)
 
     return redirect('posts:profile', username=username)

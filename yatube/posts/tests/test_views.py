@@ -11,7 +11,7 @@ from django.core.cache import cache
 
 from posts.models import Post, Group, Follow, User, Comment
 from ..constants import NUMB_OF_POSTS, NUMB_OF_POSTS_TEST, NUMB_OF_POSTS_2
-from posts.forms import PostForm
+from posts.forms import PostForm, CommentForm
 
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
@@ -89,6 +89,10 @@ class PostPagesTests(TestCase):
             user=user_new,
             author=self.user,
         )
+        Follow.objects.create(
+            user=self.user,
+            author=user_new,
+        )
         templates_first_object = {
             reverse('posts:index'): ['page_obj', 0],
             reverse('posts:group_list', kwargs={'slug': self.post.group.slug}):
@@ -99,8 +103,7 @@ class PostPagesTests(TestCase):
         for template, object in templates_first_object.items():
             with self.subTest(template=template):
                 response = self.authorized_client.get(template)
-                element = object[0]
-                number = object[1]
+                element, number = object
                 first_object = response.context[element][number]
                 self.assertEqual(
                     first_object.pub_date.strftime('%Y:%B:%D'),
@@ -126,7 +129,10 @@ class PostPagesTests(TestCase):
                     'posts:profile',
                     kwargs={'username': self.user.username}
                 ):
-                    self.assertEqual(self.user, first_object.author)
+                    self.assertEqual(
+                        self.user.following,
+                        first_object.author.following,
+                    )
                     self.assertEqual(
                         self.user.follower,
                         first_object.author.follower,
@@ -163,8 +169,8 @@ class PostPagesTests(TestCase):
         self.assertEqual(response_post_detail.image, self.post.image)
         self.assertIn(comment_new, response.context.get('comments'))
         self.assertIsInstance(
-            response.context['form'].fields.get('text'),
-            forms.fields.CharField,
+            response.context['form'],
+            CommentForm,
         )
 
     def test_post_incorrect_group(self):
@@ -326,7 +332,7 @@ class PostPagesTests(TestCase):
             ).exists()
         )
 
-    def test_unfollow_user(self):
+    def test_impossible_subscribe_to_the_author_twice(self):
         """Дважды подписаться на автора невозможно."""
         following_count = Follow.objects.count()
         self.user_follow_client.post(
@@ -346,7 +352,7 @@ class PostPagesTests(TestCase):
         )
         self.assertEqual(Follow.objects.count(), following_count + 1)
 
-    def test_unfollow_user(self):
+    def test_user_cannot_subscribe_yourself(self):
         """Пользователь не может подписаться сам на себя."""
         following_count = Follow.objects.count()
         self.authorized_client.post(
