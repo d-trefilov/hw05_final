@@ -137,3 +137,4 @@ class PostCreateFormTests(TestCase):
         self.assertEqual(comments_new.count(), 1)
         self.assertEqual(form_data['text'], comments_new[0].text)
         self.assertEqual(self.user, comments_new[0].author)
+        self.assertEqual(self.post, comments_new[0].post)
